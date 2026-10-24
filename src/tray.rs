@@ -1,3 +1,5 @@
+use std::path::{Path, PathBuf};
+
 use ksni::menu::{CheckmarkItem, StandardItem, SubMenu};
 use ksni::{Category, MenuItem, ToolTip};
 use tokio::sync::mpsc::UnboundedSender;
@@ -5,9 +7,16 @@ use tokio::sync::mpsc::UnboundedSender;
 use crate::menu::{self, Action, Entry, HelperView};
 use crate::state::Dot;
 
+/// Installed into the hicolor theme by `just install`.
+const ICON: &str = "switchboard-symbolic";
+/// Breeze's horizontal sliders, for a run from source before the icon is
+/// installed. Asking for a name no theme has leaves a blank tray slot.
+const FALLBACK_ICON: &str = "adjustlevels-symbolic";
+
 pub struct SwitchTray {
     pub helpers: Vec<HelperView>,
     pub config_error: Option<String>,
+    icon: Icon,
     actions: UnboundedSender<Action>,
 }
 
@@ -16,8 +25,49 @@ impl SwitchTray {
         Self {
             helpers: Vec::new(),
             config_error: None,
+            icon: icon_for(&data_dirs()),
             actions,
         }
+    }
+}
+
+/// `$XDG_DATA_HOME` then `$XDG_DATA_DIRS`, with the spec's defaults.
+fn data_dirs() -> Vec<PathBuf> {
+    let var = |name| std::env::var_os(name).filter(|v| !v.is_empty());
+    let home = var("XDG_DATA_HOME")
+        .map(PathBuf::from)
+        .unwrap_or_else(|| PathBuf::from(var("HOME").unwrap_or_default()).join(".local/share"));
+    let system = var("XDG_DATA_DIRS").unwrap_or_else(|| "/usr/local/share:/usr/share".into());
+    std::iter::once(home)
+        .chain(std::env::split_paths(&system))
+        .collect()
+}
+
+#[derive(Debug, PartialEq, Eq)]
+struct Icon {
+    name: &'static str,
+    /// The `icons` directory holding `name`, sent as IconThemePath. Plasma
+    /// lists a theme's directories when plasmashell starts, so an icon whose
+    /// directory `just install` created later isn't found through the theme
+    /// alone; with a theme path Plasma searches it for this item.
+    theme_path: String,
+}
+
+fn icon_for(data_dirs: &[PathBuf]) -> Icon {
+    let installed = |dir: &Path| {
+        dir.join("icons/hicolor/scalable/apps")
+            .join(format!("{ICON}.svg"))
+            .is_file()
+    };
+    match data_dirs.iter().find(|d| installed(d)) {
+        Some(dir) => Icon {
+            name: ICON,
+            theme_path: dir.join("icons").to_string_lossy().into_owned(),
+        },
+        None => Icon {
+            name: FALLBACK_ICON,
+            theme_path: String::new(),
+        },
     }
 }
 
@@ -85,7 +135,11 @@ impl ksni::Tray for SwitchTray {
     }
 
     fn icon_name(&self) -> String {
-        "network-connect-symbolic".into()
+        self.icon.name.into()
+    }
+
+    fn icon_theme_path(&self) -> String {
+        self.icon.theme_path.clone()
     }
 
     fn overlay_icon_name(&self) -> String {
@@ -117,5 +171,33 @@ mod tests {
     #[test]
     fn underscores_are_literal() {
         assert_eq!(escape("llama_server"), "llama__server");
+    }
+
+    #[test]
+    fn installed_icon_is_preferred() {
+        let root = std::env::temp_dir().join(format!("switchboard-icon-{}", std::process::id()));
+        let empty = root.join("empty");
+        let data = root.join("data");
+        let apps = data.join("icons/hicolor/scalable/apps");
+        std::fs::create_dir_all(&apps).unwrap();
+        std::fs::create_dir_all(&empty).unwrap();
+
+        assert_eq!(
+            icon_for(std::slice::from_ref(&empty)),
+            Icon {
+                name: FALLBACK_ICON,
+                theme_path: String::new()
+            }
+        );
+        std::fs::write(apps.join("switchboard-symbolic.svg"), "<svg/>").unwrap();
+        assert_eq!(
+            icon_for(&[empty, data.clone()]),
+            Icon {
+                name: ICON,
+                theme_path: data.join("icons").to_string_lossy().into_owned()
+            }
+        );
+
+        std::fs::remove_dir_all(&root).unwrap();
     }
 }

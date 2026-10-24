@@ -39,10 +39,14 @@ just uninstall   # stop and remove the tray; the units it switches stay as they 
 ```
 
 `just install` installs [`contrib/systemd/switchboard.service`](contrib/systemd/switchboard.service),
-which starts with `graphical-session.target` and restarts on failure.
+which starts with `graphical-session.target` and restarts on failure, and the
+tray icon, [`contrib/icons/switchboard-symbolic.svg`](contrib/icons/switchboard-symbolic.svg),
+into `~/.local/share/icons/hicolor`. Running it again replaces both and restarts
+the tray.
 
 To try it from source without installing: `just run`, or
-`just run --config path/to/helpers.toml`.
+`just run --config path/to/helpers.toml`. Until the icon is installed, the tray uses
+Breeze's `adjustlevels-symbolic` instead.
 
 ## Configuration
 
