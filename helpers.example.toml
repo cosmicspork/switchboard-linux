@@ -1,0 +1,31 @@
+# Copy to ~/.config/switchboard/helpers.toml. One [[helper]] per unit.
+#
+#   id    stable identifier, unique in this file
+#   name  what the menu shows
+#   unit  a .service, or a .socket for a socket-activated helper
+#   url   optional; adds "Open in browser"
+
+[[helper]]
+id = "tracon"
+name = "Tracon"
+unit = "tracon.service"
+url = "http://127.0.0.1:7420"
+
+[[helper]]
+id = "llama-server"
+name = "llama.cpp"
+unit = "llama-server.service"
+
+[[helper]]
+id = "pager-bridge"
+name = "Pager bridge"
+unit = "pager-bridge.service"
+
+# A socket-activated web app: the socket holds the port and starts the
+# service on the first connection. Stop switches off both.
+#
+# [[helper]]
+# id = "example-app"
+# name = "Example app"
+# unit = "example-app.socket"
+# url = "http://127.0.0.1:8080"

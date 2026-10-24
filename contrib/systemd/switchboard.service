@@ -1,0 +1,15 @@
+[Unit]
+Description=Switchboard tray switch for systemd user units
+Documentation=https://github.com/cosmicspork/switchboard-linux
+# The tray needs the panel's StatusNotifierWatcher, so it lives and dies with
+# the graphical session rather than the user manager.
+PartOf=graphical-session.target
+After=graphical-session.target
+
+[Service]
+ExecStart=%h/.local/bin/switchboard
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=graphical-session.target
