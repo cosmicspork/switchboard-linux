@@ -16,7 +16,7 @@ const FALLBACK_ICON: &str = "adjustlevels-symbolic";
 pub struct SwitchTray {
     pub helpers: Vec<HelperView>,
     pub config_error: Option<String>,
-    icon: &'static str,
+    icon: Icon,
     actions: UnboundedSender<Action>,
 }
 
@@ -43,16 +43,31 @@ fn data_dirs() -> Vec<PathBuf> {
         .collect()
 }
 
-fn icon_for(data_dirs: &[PathBuf]) -> &'static str {
+#[derive(Debug, PartialEq, Eq)]
+struct Icon {
+    name: &'static str,
+    /// The `icons` directory holding `name`, sent as IconThemePath. Plasma
+    /// lists a theme's directories when plasmashell starts, so an icon whose
+    /// directory `just install` created later isn't found through the theme
+    /// alone; with a theme path Plasma searches it for this item.
+    theme_path: String,
+}
+
+fn icon_for(data_dirs: &[PathBuf]) -> Icon {
     let installed = |dir: &Path| {
         dir.join("icons/hicolor/scalable/apps")
             .join(format!("{ICON}.svg"))
             .is_file()
     };
-    if data_dirs.iter().any(|d| installed(d)) {
-        ICON
-    } else {
-        FALLBACK_ICON
+    match data_dirs.iter().find(|d| installed(d)) {
+        Some(dir) => Icon {
+            name: ICON,
+            theme_path: dir.join("icons").to_string_lossy().into_owned(),
+        },
+        None => Icon {
+            name: FALLBACK_ICON,
+            theme_path: String::new(),
+        },
     }
 }
 
@@ -120,7 +135,11 @@ impl ksni::Tray for SwitchTray {
     }
 
     fn icon_name(&self) -> String {
-        self.icon.into()
+        self.icon.name.into()
+    }
+
+    fn icon_theme_path(&self) -> String {
+        self.icon.theme_path.clone()
     }
 
     fn overlay_icon_name(&self) -> String {
@@ -163,9 +182,21 @@ mod tests {
         std::fs::create_dir_all(&apps).unwrap();
         std::fs::create_dir_all(&empty).unwrap();
 
-        assert_eq!(icon_for(std::slice::from_ref(&empty)), FALLBACK_ICON);
+        assert_eq!(
+            icon_for(std::slice::from_ref(&empty)),
+            Icon {
+                name: FALLBACK_ICON,
+                theme_path: String::new()
+            }
+        );
         std::fs::write(apps.join("switchboard-symbolic.svg"), "<svg/>").unwrap();
-        assert_eq!(icon_for(&[empty, data]), ICON);
+        assert_eq!(
+            icon_for(&[empty, data.clone()]),
+            Icon {
+                name: ICON,
+                theme_path: data.join("icons").to_string_lossy().into_owned()
+            }
+        );
 
         std::fs::remove_dir_all(&root).unwrap();
     }
